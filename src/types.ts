@@ -45,10 +45,13 @@ export interface Car {
 }
 
 export interface GameState {
+  playerName: string;
   money: number;
   currentCar: Car;
   inventory: Part[];
   day: number;
+  stage: number;
+  bossDefeated: boolean;
   wins: number;
   losses: number;
 }
