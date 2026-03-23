@@ -42,6 +42,8 @@ interface CarModelProps {
   isRacing?: boolean;
   speed?: number;
   equipFlash?: number;
+  isAccelerating?: boolean;
+  isBraking?: boolean;
 }
 
 const RARITY_COLORS: Record<string, string> = {
@@ -51,7 +53,7 @@ const RARITY_COLORS: Record<string, string> = {
   legendary: '#eab308' // yellow-500
 };
 
-export const CarModel: React.FC<CarModelProps> = ({ car, position = [0, 0, 0], rotation = [0, 0, 0], isRacing, speed = 0, equipFlash = 0 }) => {
+export const CarModel: React.FC<CarModelProps> = ({ car, position = [0, 0, 0], rotation = [0, 0, 0], isRacing, speed = 0, equipFlash = 0, isAccelerating = false, isBraking = false }) => {
   const groupRef = useRef<THREE.Group>(null);
   const wheelsRef = useRef<THREE.Group[]>([]);
   const flashRef = useRef<THREE.Mesh>(null);
@@ -103,17 +105,36 @@ export const CarModel: React.FC<CarModelProps> = ({ car, position = [0, 0, 0], r
   const tireColor = p.tire?.id === 'spiked-tire' ? '#3f3f46' : '#18181b';
   const tireScale = p.tire?.id === 'spiked-tire' ? 1.1 : 1.0;
   const batteryColor = p.battery ? RARITY_COLORS[p.battery.rarity] : '#10b981';
+  const specialColor = p.special ? RARITY_COLORS[p.special.rarity] : '#3f3f46';
   const isBoss = p.weapon?.id === 'boss-weapon';
 
   return (
     <group ref={groupRef} position={position} rotation={rotation}>
+      {/* Special Part (Top Module) */}
+      {p.special && (
+        <group position={[0, 0.55, 0]}>
+          <Cylinder args={[0.2, 0.2, 0.1, 16]} castShadow>
+            <meshStandardMaterial color={specialColor} metalness={0.8} roughness={0.2} />
+          </Cylinder>
+          <mesh position={[0, 0.06, 0]}>
+            <sphereGeometry args={[0.1, 16, 16]} />
+            <meshStandardMaterial 
+              color={specialColor} 
+              emissive={specialColor} 
+              emissiveIntensity={1.5} 
+              toneMapped={false} 
+            />
+          </mesh>
+        </group>
+      )}
+
       {/* Aerodynamic Wind Simulation */}
       {isRacing && speed > 10 && (
         <group>
           {/* Existing Sparkles */}
           <group ref={windParticlesRef}>
             <Sparkles 
-              count={20} 
+              count={10} 
               scale={[1.5, 0.5, 4]} 
               size={2} 
               speed={speed * 0.1} 
@@ -121,7 +142,7 @@ export const CarModel: React.FC<CarModelProps> = ({ car, position = [0, 0, 0], r
               color="#ffffff" 
             />
             <Sparkles 
-              count={10} 
+              count={5} 
               scale={[1.2, 0.8, 3]} 
               size={4} 
               speed={speed * 0.15} 
@@ -201,6 +222,52 @@ export const CarModel: React.FC<CarModelProps> = ({ car, position = [0, 0, 0], r
             toneMapped={false} 
           />
         </Cylinder>
+      </group>
+
+      {/* Exhaust Flames */}
+      {isAccelerating && (
+        <group position={[0, 0.3, -1.4]}>
+          <Sparkles 
+            count={8} 
+            scale={[0.6, 0.6, 1]} 
+            size={4} 
+            speed={2} 
+            opacity={0.8} 
+            color="#f97316" 
+            position={[0.3, 0, 0]}
+          />
+          <Sparkles 
+            count={8} 
+            scale={[0.6, 0.6, 1]} 
+            size={4} 
+            speed={2} 
+            opacity={0.8} 
+            color="#f97316" 
+            position={[-0.3, 0, 0]}
+          />
+        </group>
+      )}
+
+      {/* Brake Lights */}
+      <group position={[0, 0.4, -1.25]}>
+        <mesh position={[0.4, 0, 0]}>
+          <boxGeometry args={[0.3, 0.1, 0.05]} />
+          <meshStandardMaterial 
+            color="#ef4444" 
+            emissive="#ef4444" 
+            emissiveIntensity={isBraking ? 5 : 0.5} 
+            toneMapped={false} 
+          />
+        </mesh>
+        <mesh position={[-0.4, 0, 0]}>
+          <boxGeometry args={[0.3, 0.1, 0.05]} />
+          <meshStandardMaterial 
+            color="#ef4444" 
+            emissive="#ef4444" 
+            emissiveIntensity={isBraking ? 5 : 0.5} 
+            toneMapped={false} 
+          />
+        </mesh>
       </group>
 
       {/* 3. Batteries (Middle/Side Mounted) */}

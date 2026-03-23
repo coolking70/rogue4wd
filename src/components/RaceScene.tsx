@@ -16,6 +16,8 @@ interface RaceSceneProps {
   stage: number;
   onFinish: (isWinner: boolean) => void;
   onProgress: (playerProg: number, oppProg: number, playerPos: [number, number], oppPos: [number, number]) => void;
+  boostActive?: boolean;
+  onBoostReady?: () => void;
 }
 
 const playBumpSound = () => {
@@ -37,7 +39,7 @@ const playBumpSound = () => {
   }
 };
 
-export const RaceScene: React.FC<RaceSceneProps> = ({ playerCar, playerStats, opponentCar, opponentStats, timeScale, cameraView, stage, onFinish, onProgress }) => {
+export const RaceScene: React.FC<RaceSceneProps> = ({ playerCar, playerStats, opponentCar, opponentStats, timeScale, cameraView, stage, onFinish, onProgress, boostActive, onBoostReady }) => {
   const curve = useMemo(() => {
     const trackIndex = (stage - 1) % TRACKS.length;
     const points = TRACKS[trackIndex].map(p => new THREE.Vector3(p[0], p[1], p[2]));
@@ -50,7 +52,7 @@ export const RaceScene: React.FC<RaceSceneProps> = ({ playerCar, playerStats, op
 
   const playerRef = useRef<THREE.Group>(null);
   const oppRef = useRef<THREE.Group>(null);
-  const playerProgress = useRef(0);
+  const playerProgress = useRef(0.002); // Start slightly ahead to avoid immediate clumping
   const oppProgress = useRef(0);
   const [finished, setFinished] = useState(false);
   
@@ -71,8 +73,19 @@ export const RaceScene: React.FC<RaceSceneProps> = ({ playerCar, playerStats, op
 
   const playerCurrentSpeed = useRef(0);
   const oppCurrentSpeed = useRef(0);
-  const playerLateralOffset = useRef(-0.8);
-  const oppLateralOffset = useRef(0.8);
+  const playerLateralOffset = useRef(-1.2); // Start wider apart
+  const oppLateralOffset = useRef(1.2);
+  const playerControlLoss = useRef(0);
+  const oppControlLoss = useRef(0);
+  
+  const [playerIsAccelerating, setPlayerIsAccelerating] = useState(false);
+  const [playerIsBraking, setPlayerIsBraking] = useState(false);
+  const [oppIsAccelerating, setOppIsAccelerating] = useState(false);
+  const [oppIsBraking, setOppIsBraking] = useState(false);
+
+  const raceTime = useRef(0);
+  const boostTriggered = useRef(false);
+  const lastProgressTime = useRef(0);
 
   useFrame((state, delta) => {
     if (finished) return;
@@ -81,21 +94,149 @@ export const RaceScene: React.FC<RaceSceneProps> = ({ playerCar, playerStats, op
     if (state.clock.elapsedTime < 2) return;
 
     const scaledDelta = delta * timeScale;
+    raceTime.current += scaledDelta;
+
+    if (raceTime.current > 5 && !boostTriggered.current && onBoostReady) {
+      boostTriggered.current = true;
+      onBoostReady();
+    }
+
+    // Curvature calculation for dynamic speed
+    const lookAhead = 0.02;
+    const p1 = curve.getPointAt(Math.min(1, playerProgress.current));
+    const p2 = curve.getPointAt(Math.min(1, playerProgress.current + lookAhead));
+    const p3 = curve.getPointAt(Math.min(1, playerProgress.current + lookAhead * 2));
+    
+    const v1 = new THREE.Vector3().subVectors(p2, p1).normalize();
+    const v2 = new THREE.Vector3().subVectors(p3, p2).normalize();
+    const angle = v1.angleTo(v2);
+    
+    const o1 = curve.getPointAt(Math.min(1, oppProgress.current));
+    const o2 = curve.getPointAt(Math.min(1, oppProgress.current + lookAhead));
+    const o3 = curve.getPointAt(Math.min(1, oppProgress.current + lookAhead * 2));
+    
+    const ov1 = new THREE.Vector3().subVectors(o2, o1).normalize();
+    const ov2 = new THREE.Vector3().subVectors(o3, o2).normalize();
+    const oAngle = ov1.angleTo(ov2);
+
+    // Dynamic target speed based on curvature and stats
+    const pHandlingFactor = (playerStats.handling || 10) / 100;
+    const pWeightFactor = (playerStats.weight || 10) / 100;
+    const pCornerPenalty = Math.min(0.8, Math.max(0, angle * (1 + pWeightFactor - pHandlingFactor)));
+    let currentPTargetSpeed = playerTargetSpeed * (1 - pCornerPenalty);
+    
+    if (boostActive) {
+      currentPTargetSpeed *= 1.5;
+    }
+
+    const oHandlingFactor = (opponentStats.handling || 10) / 100;
+    const oWeightFactor = (opponentStats.weight || 10) / 100;
+    const oCornerPenalty = Math.min(0.8, Math.max(0, oAngle * (1 + oWeightFactor - oHandlingFactor)));
+    const currentOTargetSpeed = oppTargetSpeed * (1 - oCornerPenalty);
 
     // Acceleration logic
     const playerAccel = (playerStats.acceleration || 5) / 100 * 0.05;
     const oppAccel = (opponentStats.acceleration || 5) / 100 * 0.05;
 
-    if (playerCurrentSpeed.current < playerTargetSpeed) {
+    let pAcc = false;
+    let pBrk = false;
+    if (playerCurrentSpeed.current < currentPTargetSpeed) {
       playerCurrentSpeed.current += playerAccel * scaledDelta;
-    }
-    if (oppCurrentSpeed.current < oppTargetSpeed) {
-      oppCurrentSpeed.current += oppAccel * scaledDelta;
+      pAcc = true;
+    } else if (playerCurrentSpeed.current > currentPTargetSpeed) {
+      playerCurrentSpeed.current -= playerAccel * 1.5 * scaledDelta; // Braking is faster
+      pBrk = true;
     }
 
-    // Recover lateral offset
-    playerLateralOffset.current += (-0.8 - playerLateralOffset.current) * 5 * scaledDelta;
-    oppLateralOffset.current += (0.8 - oppLateralOffset.current) * 5 * scaledDelta;
+    let oAcc = false;
+    let oBrk = false;
+    if (oppCurrentSpeed.current < currentOTargetSpeed) {
+      oppCurrentSpeed.current += oppAccel * scaledDelta;
+      oAcc = true;
+    } else if (oppCurrentSpeed.current > currentOTargetSpeed) {
+      oppCurrentSpeed.current -= oppAccel * 1.5 * scaledDelta;
+      oBrk = true;
+    }
+    
+    // Update states sparingly to avoid too many re-renders
+    if (pAcc !== playerIsAccelerating) setPlayerIsAccelerating(pAcc);
+    if (pBrk !== playerIsBraking) setPlayerIsBraking(pBrk);
+    if (oAcc !== oppIsAccelerating) setOppIsAccelerating(oAcc);
+    if (oBrk !== oppIsBraking) setOppIsBraking(oBrk);
+
+    // Recover lateral offset and handle control loss
+    if (playerControlLoss.current > 0) {
+      playerControlLoss.current = Math.max(0, playerControlLoss.current - scaledDelta);
+    }
+    if (oppControlLoss.current > 0) {
+      oppControlLoss.current = Math.max(0, oppControlLoss.current - scaledDelta);
+    }
+
+    const playerControlFactor = 1 - Math.min(1, playerControlLoss.current);
+    const oppControlFactor = 1 - Math.min(1, oppControlLoss.current);
+
+    // Calculate track curvature for inertia and racing line
+    const getCurvature = (progress: number) => {
+      const p1 = curve.getPointAt(progress % 1);
+      const p2 = curve.getPointAt((progress + 0.01) % 1);
+      const p3 = curve.getPointAt((progress + 0.02) % 1);
+      
+      const v1 = new THREE.Vector3().subVectors(p2, p1).normalize();
+      const v2 = new THREE.Vector3().subVectors(p3, p2).normalize();
+      
+      // Cross product gives the turn axis. Y component indicates left/right turn.
+      // If Y > 0, turning left. If Y < 0, turning right.
+      const turnAxis = v1.clone().cross(v2);
+      return turnAxis.y * 100; // Scale up for easier math
+    };
+
+    const playerCurvature = getCurvature(playerProgress.current);
+    const oppCurvature = getCurvature(oppProgress.current);
+
+    // Inertia pushes car OUTWARD. 
+    // If turning left (curvature > 0), force is right (positive lateral offset).
+    // If turning right (curvature < 0), force is left (negative lateral offset).
+    const playerHandling = Math.max(1, playerStats.handling || 10);
+    const oppHandling = Math.max(1, opponentStats.handling || 10);
+    
+    // Base target offset (racing line)
+    // A good handling car will try to cut the corner (move INTO the turn).
+    // Turning left (curvature > 0) -> cut left (negative offset).
+    let playerTargetOffset = -playerCurvature * 0.8; 
+    let oppTargetOffset = -oppCurvature * 0.8;
+
+    // Centrifugal force pushing outward (inertia)
+    // Speed is around 0.05, so speed * 20 is around 1.0
+    const playerSpeedFactor = playerCurrentSpeed.current * 20;
+    const oppSpeedFactor = oppCurrentSpeed.current * 20;
+    
+    const playerInertia = playerCurvature * Math.pow(playerSpeedFactor, 2) * (100 / playerHandling) * 0.5;
+    const oppInertia = oppCurvature * Math.pow(oppSpeedFactor, 2) * (100 / oppHandling) * 0.5;
+
+    playerTargetOffset += playerInertia;
+    oppTargetOffset += oppInertia;
+
+    // Clamp to track bounds
+    playerTargetOffset = Math.max(-1.5, Math.min(1.5, playerTargetOffset));
+    oppTargetOffset = Math.max(-1.5, Math.min(1.5, oppTargetOffset));
+
+    // Collision avoidance (if close longitudinally)
+    const longDist = Math.abs(playerProgress.current - oppProgress.current);
+    if (longDist < 0.04) {
+      const currentLatDist = oppLateralOffset.current - playerLateralOffset.current;
+      if (currentLatDist > 0) {
+        // Player is on the left
+        playerTargetOffset = Math.min(playerTargetOffset, -0.6);
+        oppTargetOffset = Math.max(oppTargetOffset, 0.6);
+      } else {
+        // Player is on the right
+        playerTargetOffset = Math.max(playerTargetOffset, 0.6);
+        oppTargetOffset = Math.min(oppTargetOffset, -0.6);
+      }
+    }
+
+    playerLateralOffset.current += (playerTargetOffset - playerLateralOffset.current) * 3 * playerControlFactor * scaledDelta;
+    oppLateralOffset.current += (oppTargetOffset - oppLateralOffset.current) * 3 * oppControlFactor * scaledDelta;
 
     playerProgress.current += playerCurrentSpeed.current * scaledDelta;
     oppProgress.current += oppCurrentSpeed.current * scaledDelta;
@@ -103,7 +244,11 @@ export const RaceScene: React.FC<RaceSceneProps> = ({ playerCar, playerStats, op
     const pPos = curve.getPointAt(playerProgress.current % 1);
     const oPos = curve.getPointAt(oppProgress.current % 1);
 
-    onProgress(playerProgress.current, oppProgress.current, [pPos.x, pPos.z], [oPos.x, oPos.z]);
+    // Throttle onProgress to ~10fps (every 0.1s) to prevent excessive React re-renders
+    if (state.clock.elapsedTime - lastProgressTime.current > 0.1) {
+      onProgress(playerProgress.current, oppProgress.current, [pPos.x, pPos.z], [oPos.x, oPos.z]);
+      lastProgressTime.current = state.clock.elapsedTime;
+    }
 
     // Collision detection
     if (collisionCooldown.current > 0) {
@@ -125,26 +270,50 @@ export const RaceScene: React.FC<RaceSceneProps> = ({ playerCar, playerStats, op
         const playerStability = playerStats.stability || 10;
         const oppStability = opponentStats.stability || 10;
 
+        // Calculate relative speed and impact angle
+        const speedDiff = playerCurrentSpeed.current - oppCurrentSpeed.current;
+        const absSpeedDiff = Math.abs(speedDiff);
+        
+        // Nuanced force based on relative speeds and angles
+        // If dist is very small but lateralDist is larger, it's a side-swipe.
+        // If dist is larger but lateralDist is small, it's a rear-end.
+        const isRearEnd = dist > 0.005 && lateralDist < 0.5;
+        const impactSeverity = Math.max(0.01, absSpeedDiff * (isRearEnd ? 2.0 : 1.0) + (lateralDist * 0.02));
+
         // Heavier/more stable car loses less speed
-        const playerSpeedLoss = 0.01 * (oppWeight / playerWeight) * (100 / Math.max(1, playerStability));
-        const oppSpeedLoss = 0.01 * (playerWeight / oppWeight) * (100 / Math.max(1, oppStability));
+        const playerSpeedLoss = impactSeverity * (oppWeight / playerWeight) * (100 / Math.max(1, playerStability));
+        const oppSpeedLoss = impactSeverity * (playerWeight / oppWeight) * (100 / Math.max(1, oppStability));
 
-        playerCurrentSpeed.current = Math.max(0.01, playerCurrentSpeed.current - playerSpeedLoss);
-        oppCurrentSpeed.current = Math.max(0.01, oppCurrentSpeed.current - oppSpeedLoss);
-
-        // Lateral bounce
-        const bounceForce = 0.4;
-        if (playerLateralOffset.current < oppLateralOffset.current) {
-          playerLateralOffset.current -= bounceForce;
-          oppLateralOffset.current += bounceForce;
+        // Apply speed changes
+        if (speedDiff > 0) {
+          // Player hit opponent from behind
+          playerCurrentSpeed.current = Math.max(0.01, playerCurrentSpeed.current - playerSpeedLoss);
+          oppCurrentSpeed.current = Math.min(oppTargetSpeed, oppCurrentSpeed.current + (oppSpeedLoss * 0.5)); // Opponent gets a slight push
         } else {
-          playerLateralOffset.current += bounceForce;
-          oppLateralOffset.current -= bounceForce;
+          // Opponent hit player from behind
+          oppCurrentSpeed.current = Math.max(0.01, oppCurrentSpeed.current - oppSpeedLoss);
+          playerCurrentSpeed.current = Math.min(playerTargetSpeed, playerCurrentSpeed.current + (playerSpeedLoss * 0.5)); // Player gets a slight push
+        }
+
+        // Temporary reduction in control (Control Loss)
+        playerControlLoss.current = Math.min(2.0, impactSeverity * 50 * (100 / Math.max(1, playerStability)));
+        oppControlLoss.current = Math.min(2.0, impactSeverity * 50 * (100 / Math.max(1, oppStability)));
+
+        // Lateral bounce based on impact severity
+        const baseBounce = 0.2;
+        const dynamicBounce = Math.min(0.8, baseBounce + (impactSeverity * 10));
+        
+        if (playerLateralOffset.current < oppLateralOffset.current) {
+          playerLateralOffset.current -= dynamicBounce * (oppWeight / playerWeight);
+          oppLateralOffset.current += dynamicBounce * (playerWeight / oppWeight);
+        } else {
+          playerLateralOffset.current += dynamicBounce * (oppWeight / playerWeight);
+          oppLateralOffset.current -= dynamicBounce * (playerWeight / oppWeight);
         }
 
         // Calculate midpoint for particles
         const midPos = new THREE.Vector3().addVectors(pPos, oPos).multiplyScalar(0.5);
-        midPos.y = 1;
+        midPos.y = midPos.y * 0.05 + 1;
         setCollisionPos(midPos);
         
         // Hide particles after a short time
@@ -170,16 +339,34 @@ export const RaceScene: React.FC<RaceSceneProps> = ({ playerCar, playerStats, op
       const pos = curve.getPointAt(p);
       const tangent = curve.getTangentAt(p);
       
-      const up = new THREE.Vector3(0, 1, 0);
-      const right = new THREE.Vector3().crossVectors(tangent, up).normalize();
+      const globalUp = new THREE.Vector3(0, 1, 0);
+      const right = new THREE.Vector3().crossVectors(tangent, globalUp).normalize();
+      const trackUp = new THREE.Vector3().crossVectors(right, tangent).normalize();
+
+      // Calculate unscaled position on the tube surface (radius 3)
+      const carPos = pos.clone()
+        .addScaledVector(trackUp, 3)
+        .addScaledVector(right, offset);
+
+      // Apply track squashing scale to position
+      carPos.y *= 0.05;
+
+      // Add a small bounce effect based on speed and stability
+      const stats = isPlayer ? playerStats : opponentStats;
+      const currentSpeed = isPlayer ? playerCurrentSpeed.current : oppCurrentSpeed.current;
+      const stabilityFactor = (stats.stability || 10) / 100;
+      const bounceAmplitude = (1 - stabilityFactor) * 0.05 * (currentSpeed / 10);
+      const bounceFreq = currentSpeed * 20;
+      carPos.y += Math.sin(state.clock.elapsedTime * bounceFreq) * bounceAmplitude;
       
-      // Position car on the track surface (y offset) and side offset
-      pos.y = 0.15; 
-      pos.addScaledVector(right, offset);
+      ref.current.position.copy(carPos);
       
-      ref.current.position.copy(pos);
-      
-      const lookAtPos = pos.clone().add(tangent);
+      // Apply squashing to tangent for correct orientation
+      const squashedTangent = tangent.clone();
+      squashedTangent.y *= 0.05;
+      squashedTangent.normalize();
+
+      const lookAtPos = carPos.clone().add(squashedTangent);
       ref.current.lookAt(lookAtPos);
     };
 
@@ -189,26 +376,31 @@ export const RaceScene: React.FC<RaceSceneProps> = ({ playerCar, playerStats, op
     // Dynamic Camera
     if (playerRef.current) {
       const p = playerProgress.current % 1;
-      const pos = curve.getPointAt(p);
       const tangent = curve.getTangentAt(p);
+      
+      // Apply squashing to tangent for correct orientation
+      tangent.y *= 0.05;
+      tangent.normalize();
+      
+      const carPos = playerRef.current.position.clone();
       
       let targetCamPos = new THREE.Vector3();
       let lookAtTarget = new THREE.Vector3();
 
       if (cameraView === 'follow') {
         // Camera behind and above the car
-        const cameraOffset = new THREE.Vector3(0, 6, 0).addScaledVector(tangent, -12);
-        targetCamPos = pos.clone().add(cameraOffset);
-        lookAtTarget = pos.clone().addScaledVector(tangent, 10);
+        const cameraOffset = new THREE.Vector3(0, 4, 0).addScaledVector(tangent, -10);
+        targetCamPos = carPos.clone().add(cameraOffset);
+        lookAtTarget = carPos.clone().addScaledVector(tangent, 10);
       } else if (cameraView === 'top') {
         // Top-down view tracking the player
-        targetCamPos = new THREE.Vector3(pos.x, 40, pos.z + 10);
-        lookAtTarget = pos.clone();
+        targetCamPos = new THREE.Vector3(carPos.x, carPos.y + 40, carPos.z + 10);
+        lookAtTarget = carPos.clone();
       } else if (cameraView === 'fpv') {
         // First-person view (hood camera)
-        const cameraOffset = new THREE.Vector3(0, 1.5, 0).addScaledVector(tangent, 2);
-        targetCamPos = pos.clone().add(cameraOffset);
-        lookAtTarget = pos.clone().addScaledVector(tangent, 20);
+        const cameraOffset = new THREE.Vector3(0, 0.8, 0).addScaledVector(tangent, 1);
+        targetCamPos = carPos.clone().add(cameraOffset);
+        lookAtTarget = carPos.clone().addScaledVector(tangent, 20);
       }
 
       // Apply shake
@@ -225,6 +417,24 @@ export const RaceScene: React.FC<RaceSceneProps> = ({ playerCar, playerStats, op
 
   const startPos = curve.getPointAt(0);
   const startTangent = curve.getTangentAt(0);
+  
+  const globalUp = new THREE.Vector3(0, 1, 0);
+  const startRight = new THREE.Vector3().crossVectors(startTangent, globalUp).normalize();
+  const startTrackUp = new THREE.Vector3().crossVectors(startRight, startTangent).normalize();
+
+  // Calculate unscaled position on the tube surface (radius 3)
+  const unscaledStartSurfacePos = startPos.clone().addScaledVector(startTrackUp, 3.5);
+  const unscaledStartRotation = new THREE.Euler().setFromQuaternion(
+    new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), startTangent)
+  );
+
+  const startSurfacePos = startPos.clone().addScaledVector(startTrackUp, 3);
+
+  // Apply track squashing scale
+  startSurfacePos.y *= 0.05;
+  startTangent.y *= 0.05;
+  startTangent.normalize();
+
   const startRotation = new THREE.Euler().setFromQuaternion(
     new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), startTangent)
   );
@@ -241,26 +451,38 @@ export const RaceScene: React.FC<RaceSceneProps> = ({ playerCar, playerStats, op
       <mesh receiveShadow position={[0, 0, 0]} scale={[1, 0.05, 1]}>
         <primitive object={trackGeometry} attach="geometry" />
         <meshStandardMaterial color="#27272a" roughness={0.8} metalness={0.2} />
+        
+        {/* Start/Finish Line */}
+        <group position={[unscaledStartSurfacePos.x, unscaledStartSurfacePos.y, unscaledStartSurfacePos.z]} rotation={unscaledStartRotation}>
+          <mesh position={[0, 0, 0]} rotation={[-Math.PI/2, 0, 0]}>
+            <planeGeometry args={[6, 1]} />
+            <meshStandardMaterial color="#ffffff" />
+          </mesh>
+          <mesh position={[0, 0.1, 0]} rotation={[-Math.PI/2, 0, 0]}>
+            <planeGeometry args={[6, 0.5]} />
+            <meshStandardMaterial color="#000000" />
+          </mesh>
+        </group>
       </mesh>
 
-      {/* Start/Finish Line */}
-      <group position={[startPos.x, 0.16, startPos.z]} rotation={startRotation}>
-        <mesh position={[0, 0, 0]} rotation={[-Math.PI/2, 0, 0]}>
-          <planeGeometry args={[6, 1]} />
-          <meshStandardMaterial color="#ffffff" />
-        </mesh>
-        <mesh position={[0, 0.01, 0]} rotation={[-Math.PI/2, 0, 0]}>
-          <planeGeometry args={[6, 0.5]} />
-          <meshStandardMaterial color="#000000" />
-        </mesh>
-      </group>
-
       {/* Cars */}
-      <group ref={playerRef} position={[startPos.x, 0.15, startPos.z]}>
-        <CarModel car={playerCar} isRacing speed={playerStats.speed} />
+      <group ref={playerRef} position={[startSurfacePos.x, startSurfacePos.y, startSurfacePos.z]}>
+        <CarModel 
+          car={playerCar} 
+          isRacing 
+          speed={playerStats.speed} 
+          isAccelerating={playerIsAccelerating}
+          isBraking={playerIsBraking}
+        />
       </group>
-      <group ref={oppRef} position={[startPos.x, 0.15, startPos.z]}>
-        <CarModel car={opponentCar} isRacing speed={opponentStats.speed} />
+      <group ref={oppRef} position={[startSurfacePos.x, startSurfacePos.y, startSurfacePos.z]}>
+        <CarModel 
+          car={opponentCar} 
+          isRacing 
+          speed={opponentStats.speed} 
+          isAccelerating={oppIsAccelerating}
+          isBraking={oppIsBraking}
+        />
       </group>
 
       {/* Collision Particles */}

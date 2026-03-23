@@ -21,6 +21,7 @@ export interface Synergy {
 
 export interface Part {
   id: string;
+  baseId?: string; // Used for 3-in-1 merging
   name: string;
   type: PartType;
   manufacturer: string;
@@ -29,6 +30,7 @@ export interface Part {
   stats: Stats;
   description: string;
   tags: string[];
+  star?: number; // 1, 2, 3
 }
 
 export interface Manufacturer {
@@ -47,6 +49,8 @@ export interface Car {
 export interface GameState {
   playerName: string;
   money: number;
+  level: number;
+  xp: number;
   currentCar: Car;
   inventory: Part[];
   day: number;
@@ -54,4 +58,5 @@ export interface GameState {
   bossDefeated: boolean;
   wins: number;
   losses: number;
+  streak: number; // positive for win streak, negative for loss streak
 }

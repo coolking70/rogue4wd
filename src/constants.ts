@@ -47,48 +47,75 @@ export const INITIAL_PARTS: Part[] = [
   { id: 'sc-battery-1', name: 'SC 聚能电池', type: 'battery', manufacturer: 'spark-core', price: 0, rarity: 'common', stats: { speed: 0, acceleration: 0, handling: 0, stability: 0, weight: 6, energy: 60 }, description: '高效储能的基础电池。', tags: ['spark-core', 'energy'] },
 ];
 
+export const SHOP_PROBABILITIES = {
+  1: { common: 100, rare: 0, epic: 0, legendary: 0 },
+  2: { common: 80, rare: 20, epic: 0, legendary: 0 },
+  3: { common: 60, rare: 35, epic: 5, legendary: 0 },
+  4: { common: 40, rare: 45, epic: 15, legendary: 0 },
+  5: { common: 25, rare: 45, epic: 25, legendary: 5 },
+  6: { common: 15, rare: 40, epic: 35, legendary: 10 },
+  7: { common: 10, rare: 30, epic: 40, legendary: 20 },
+  8: { common: 5, rare: 20, epic: 45, legendary: 30 },
+  9: { common: 0, rare: 10, epic: 50, legendary: 40 },
+  10: { common: 0, rare: 0, epic: 40, legendary: 60 },
+};
+
 export const SYNERGIES: Synergy[] = [
   {
-    id: 'aero-tech-set',
-    name: 'AeroTech 品牌共鸣',
-    description: '装备3件以上 AeroTech 零件时，极速+15%，重量-10%',
-    requiredParts: ['aero-tech', 'aero-tech', 'aero-tech'],
-    bonus: { speed: 15, weight: -10 }
+    id: 'aero-tech-2',
+    name: 'AeroTech (2)',
+    description: '装备2件 AeroTech 零件：极速+10%',
+    requiredParts: ['aero-tech', 'aero-tech'],
+    bonus: { speed: 10 }
   },
   {
-    id: 'heavy-metal-set',
-    name: 'HeavyMetal 品牌共鸣',
-    description: '装备3件以上 HeavyMetal 零件时，稳定性+20%，防御+20%',
-    requiredParts: ['heavy-metal', 'heavy-metal', 'heavy-metal'],
-    bonus: { stability: 20, defense: 20 }
+    id: 'aero-tech-4',
+    name: 'AeroTech (4)',
+    description: '装备4件 AeroTech 零件：极速+25%',
+    requiredParts: ['aero-tech', 'aero-tech', 'aero-tech', 'aero-tech'],
+    bonus: { speed: 25 }
   },
   {
-    id: 'spark-core-set',
-    name: 'SparkCore 品牌共鸣',
-    description: '装备3件以上 SparkCore 零件时，能量+30%，加速度+15%',
-    requiredParts: ['spark-core', 'spark-core', 'spark-core'],
-    bonus: { energy: 30, acceleration: 15 }
+    id: 'heavy-metal-2',
+    name: 'HeavyMetal (2)',
+    description: '装备2件 HeavyMetal 零件：稳定性+15%',
+    requiredParts: ['heavy-metal', 'heavy-metal'],
+    bonus: { stability: 15 }
   },
   {
-    id: 'plasma-overload',
-    name: '等离子过载',
-    description: '同时装备等离子马达与核能电池时，速度额外+15%',
-    requiredParts: ['plasma', 'energy'],
-    bonus: { speed: 15 }
+    id: 'heavy-metal-4',
+    name: 'HeavyMetal (4)',
+    description: '装备4件 HeavyMetal 零件：稳定性+35%',
+    requiredParts: ['heavy-metal', 'heavy-metal', 'heavy-metal', 'heavy-metal'],
+    bonus: { stability: 35 }
   },
   {
-    id: 'aero-master',
-    name: '空力大师',
-    description: '装备3件以上带有 "aero" 标签的零件时，加速度+20%',
-    requiredParts: ['aero', 'aero', 'aero'],
-    bonus: { acceleration: 20 }
+    id: 'spark-core-2',
+    name: 'SparkCore (2)',
+    description: '装备2件 SparkCore 零件：能量+20%',
+    requiredParts: ['spark-core', 'spark-core'],
+    bonus: { energy: 20 }
   },
   {
-    id: 'heavy-armor',
-    name: '重装堡垒',
-    description: '装备3件以上带有 "heavy" 标签的零件时，稳定性+25%',
-    requiredParts: ['heavy', 'heavy', 'heavy'],
-    bonus: { stability: 25 }
+    id: 'spark-core-4',
+    name: 'SparkCore (4)',
+    description: '装备4件 SparkCore 零件：能量+50%',
+    requiredParts: ['spark-core', 'spark-core', 'spark-core', 'spark-core'],
+    bonus: { energy: 50 }
+  },
+  {
+    id: 'speed-2',
+    name: '极速先锋 (2)',
+    description: '装备2件 "speed" 标签零件：加速度+15%',
+    requiredParts: ['speed', 'speed'],
+    bonus: { acceleration: 15 }
+  },
+  {
+    id: 'energy-2',
+    name: '能量核心 (2)',
+    description: '装备2件 "energy" 标签零件：能量+30%',
+    requiredParts: ['energy', 'energy'],
+    bonus: { energy: 30 }
   }
 ];
 
@@ -99,7 +126,7 @@ export const SHOP_PARTS: Part[] = [
     name: '等离子马达',
     type: 'motor',
     manufacturer: 'spark-core',
-    price: 150,
+    price: 2,
     rarity: 'rare',
     stats: { speed: 25, acceleration: 20, handling: -5, stability: -5, weight: 8, energy: -15 },
     description: '高能耗但爆发力极强的马达。',
@@ -110,7 +137,7 @@ export const SHOP_PARTS: Part[] = [
     name: 'V2 强化马达',
     type: 'motor',
     manufacturer: 'aero-tech',
-    price: 80,
+    price: 1,
     rarity: 'common',
     stats: { speed: 15, acceleration: 15, handling: 0, stability: 0, weight: 6, energy: -8 },
     description: '比入门级马达更强劲。',
@@ -121,7 +148,7 @@ export const SHOP_PARTS: Part[] = [
     name: 'V3 竞速马达',
     type: 'motor',
     manufacturer: 'aero-tech',
-    price: 250,
+    price: 3,
     rarity: 'epic',
     stats: { speed: 35, acceleration: 30, handling: -10, stability: -10, weight: 10, energy: -25 },
     description: '职业赛车手专用的顶级马达。',
@@ -133,7 +160,7 @@ export const SHOP_PARTS: Part[] = [
     name: '碳纤维车壳',
     type: 'body',
     manufacturer: 'aero-tech',
-    price: 120,
+    price: 2,
     rarity: 'rare',
     stats: { speed: 10, acceleration: 15, handling: 5, stability: 0, weight: -10, energy: 0 },
     description: '极轻的材质，大幅提升灵活性。',
@@ -144,7 +171,7 @@ export const SHOP_PARTS: Part[] = [
     name: '合金装甲车壳',
     type: 'body',
     manufacturer: 'heavy-metal',
-    price: 140,
+    price: 2,
     rarity: 'rare',
     stats: { speed: -5, acceleration: -5, handling: -5, stability: 25, weight: 15, energy: 0 },
     description: '沉重但极其坚固。',
@@ -156,7 +183,7 @@ export const SHOP_PARTS: Part[] = [
     name: '防滑钉胎',
     type: 'tire',
     manufacturer: 'heavy-metal',
-    price: 80,
+    price: 1,
     rarity: 'common',
     stats: { speed: -5, acceleration: 5, handling: 15, stability: 20, weight: 5, energy: 0 },
     description: '在复杂赛道上表现出色。',
@@ -167,7 +194,7 @@ export const SHOP_PARTS: Part[] = [
     name: '光头胎',
     type: 'tire',
     manufacturer: 'aero-tech',
-    price: 100,
+    price: 2,
     rarity: 'rare',
     stats: { speed: 15, acceleration: 10, handling: -5, stability: -10, weight: 3, energy: 0 },
     description: '极致降低摩擦力，专为直线加速设计。',
@@ -179,7 +206,7 @@ export const SHOP_PARTS: Part[] = [
     name: '核能电池',
     type: 'battery',
     manufacturer: 'spark-core',
-    price: 200,
+    price: 3,
     rarity: 'epic',
     stats: { speed: 5, acceleration: 5, handling: 0, stability: 0, weight: 15, energy: 100 },
     description: '几乎无限的能源，但非常沉重。',
@@ -190,7 +217,7 @@ export const SHOP_PARTS: Part[] = [
     name: '高能锂电池',
     type: 'battery',
     manufacturer: 'spark-core',
-    price: 90,
+    price: 1,
     rarity: 'common',
     stats: { speed: 0, acceleration: 0, handling: 0, stability: 0, weight: 4, energy: 40 },
     description: '轻量化且电量充足。',
@@ -202,7 +229,7 @@ export const SHOP_PARTS: Part[] = [
     name: '钛合金底盘',
     type: 'chassis',
     manufacturer: 'heavy-metal',
-    price: 180,
+    price: 2,
     rarity: 'rare',
     stats: { speed: 0, acceleration: 5, handling: 10, stability: 25, weight: 15, energy: 0 },
     description: '极其稳固的底盘，适合高难度赛道。',
@@ -213,7 +240,7 @@ export const SHOP_PARTS: Part[] = [
     name: '破风底盘',
     type: 'chassis',
     manufacturer: 'aero-tech',
-    price: 190,
+    price: 2,
     rarity: 'rare',
     stats: { speed: 15, acceleration: 10, handling: 5, stability: -5, weight: -5, energy: 0 },
     description: '流线型设计，减少风阻。',
@@ -224,7 +251,7 @@ export const SHOP_PARTS: Part[] = [
     name: '碳纤维底盘',
     type: 'chassis',
     manufacturer: 'aero-tech',
-    price: 320,
+    price: 3,
     rarity: 'epic',
     stats: { speed: 20, acceleration: 20, handling: 10, stability: -10, weight: -15, energy: 0 },
     description: '极致轻量化，专为竞速而生。',
@@ -236,7 +263,7 @@ export const SHOP_PARTS: Part[] = [
     name: '微型激光炮',
     type: 'weapon',
     manufacturer: 'heavy-metal',
-    price: 250,
+    price: 3,
     rarity: 'epic',
     stats: { speed: -5, acceleration: -5, handling: -5, stability: 0, weight: 20, energy: -20, attack: 30 },
     description: '干扰对手的强力武器。',
@@ -247,7 +274,7 @@ export const SHOP_PARTS: Part[] = [
     name: '等离子护盾',
     type: 'special',
     manufacturer: 'spark-core',
-    price: 280,
+    price: 3,
     rarity: 'epic',
     stats: { speed: -2, acceleration: -2, handling: 5, stability: 30, weight: 10, energy: -15 },
     description: '生成能量场，大幅提升稳定性。',
@@ -258,7 +285,7 @@ export const SHOP_PARTS: Part[] = [
     name: '超级增压器',
     type: 'special',
     manufacturer: 'aero-tech',
-    price: 160,
+    price: 2,
     rarity: 'rare',
     stats: { speed: 15, acceleration: 25, handling: -10, stability: -5, weight: 5, energy: -10 },
     description: '牺牲稳定性换取极致的爆发力。',
@@ -269,7 +296,7 @@ export const SHOP_PARTS: Part[] = [
     name: '智能AI芯片',
     type: 'special',
     manufacturer: 'generic',
-    price: 140,
+    price: 2,
     rarity: 'rare',
     stats: { speed: 5, acceleration: 5, handling: 20, stability: 10, weight: 2, energy: -5 },
     description: '优化行车路径，显著提升操控性。',
@@ -280,7 +307,7 @@ export const SHOP_PARTS: Part[] = [
     name: '量子核心',
     type: 'special',
     manufacturer: 'spark-core',
-    price: 500,
+    price: 4,
     rarity: 'legendary',
     stats: { speed: 30, acceleration: 30, handling: 30, stability: 30, weight: -10, energy: 50 },
     description: '传说中的终极配件，全方位提升赛车性能。',
@@ -291,7 +318,7 @@ export const SHOP_PARTS: Part[] = [
     name: '重力锚定器',
     type: 'special',
     manufacturer: 'heavy-metal',
-    price: 450,
+    price: 4,
     rarity: 'legendary',
     stats: { speed: -10, acceleration: -10, handling: 10, stability: 100, weight: 50, energy: -20 },
     description: '让赛车稳如泰山，绝不翻车。',
@@ -302,7 +329,7 @@ export const SHOP_PARTS: Part[] = [
     name: 'AT 幻影外壳',
     type: 'body',
     manufacturer: 'aero-tech',
-    price: 480,
+    price: 4,
     rarity: 'legendary',
     stats: { speed: 40, acceleration: 20, handling: 15, stability: -5, weight: -20, energy: 0 },
     description: '传说中的空气动力学巅峰之作，轻如鸿毛。',
@@ -313,7 +340,7 @@ export const SHOP_PARTS: Part[] = [
     name: 'HM 工业巨兽马达',
     type: 'motor',
     manufacturer: 'heavy-metal',
-    price: 260,
+    price: 3,
     rarity: 'epic',
     stats: { speed: 10, acceleration: 40, handling: -10, stability: 15, weight: 25, energy: -30 },
     description: '提供无与伦比的扭矩，无视任何阻力。',
@@ -324,7 +351,7 @@ export const SHOP_PARTS: Part[] = [
     name: 'SC 闪电磁悬浮胎',
     type: 'tire',
     manufacturer: 'spark-core',
-    price: 240,
+    price: 3,
     rarity: 'epic',
     stats: { speed: 20, acceleration: 25, handling: 20, stability: -15, weight: 5, energy: -15 },
     description: '极高能耗的磁悬浮轮胎，带来极致的加速和操控。',
@@ -349,5 +376,13 @@ export const TRACKS: [number, number, number][][] = [
   // Stage 4: Figure 8ish (CatmullRom will smooth it)
   [
     [0, 0, 35], [25, 0, 20], [10, 0, -10], [30, 0, -30], [0, 0, -40], [-30, 0, -30], [-10, 0, -10], [-25, 0, 20]
+  ],
+  // Stage 5: Mountain Pass (Elevation changes and tight turns)
+  [
+    [0, 0, 40], [20, 50, 20], [40, 150, -10], [10, 200, -30], [-20, 100, -40], [-40, 0, -10], [-20, -50, 20]
+  ],
+  // Stage 6: The Corkscrew (Rapid drops and winding sections)
+  [
+    [0, 0, 30], [30, 100, 30], [30, 200, 0], [0, 300, -30], [-30, 150, -30], [-30, 0, 0], [-15, -100, 15]
   ]
 ];
